@@ -17,7 +17,7 @@
     const SELF_ASSESSMENT_URL = "https://script.google.com/macros/s/AKfycbyHPLQ7gZGtnZYTrfnAZNBpuo3Ea5rwbsP9rbBiIAYU2ttUs_i8oS03_Iut-S80Sewb/exec";   // из selfAssessment.gs
     const TEST_RESULTS_URL = "https://script.google.com/macros/s/AKfycbyA95RzcVlbW7UxDIFC4WcfKPpP3_niERw8dN39LJzrYnMG85IS3YnYpPyVTTet8b1L/exec";      // из Code.gs
     const TEST_QUESTIONS_URL = "https://script.google.com/macros/s/AKfycbymZueJVozXFoH2wxfJM3jAGXg08mhwrzVAQMKmpR7mm4XQWQKNe-AHYz-iryA8QVqUYg/exec";    // из getQuestions.gs
-    const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwa800cNkZZ3KJVmc3FRGshUkAwW-Xk1oAi8RtugIoHbkYAOsyAYEOosVOiqpaO7eJo/exec";    // из sendRecomendations.gs
+    const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwFBCN6odEpe2oSiO1HRRHjcZ0frtbY4Tks0JsQ80yxxu3sCu4g8JXj2p8FHe-SpINe/exec";    // из sendRecomendations.gs
 
     // ============================================================
     // БЛОК 1: САМООЦЕНКА КОМПЕТЕНЦИЙ (оценка от 1 до 10)
@@ -424,9 +424,16 @@
     }
 
     function submitTest() {
-    if (!testAnswers.userName.trim()) { showMessage("❌ Укажите ФИО", 'error'); return; }
-    if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { showMessage("❌ Укажите корректный email", 'error'); return; }
+    if (!testAnswers.userName.trim()) { 
+        showMessage("❌ Укажите ФИО", 'error'); 
+        return; 
+    }
+    if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { 
+        showMessage("❌ Укажите корректный email", 'error'); 
+        return; 
+    }
 
+    // Проверяем, что все вопросы теста отвечены
     for (let i = 0; i < testAreas.length; i++) {
         const closedArr = testAnswers.closed[i];
         if (!closedArr || closedArr.length !== testAreas[i].closedCount || closedArr.some(v => v === null)) {
@@ -443,7 +450,13 @@
     const dateStr = now.toLocaleDateString('ru-RU');
     const timeStr = now.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 
-    let payload = { userName: testAnswers.userName, userEmail: testAnswers.userEmail, date: dateStr, time: timeStr };
+    // Формируем payload для сохранения результатов теста
+    let payload = { 
+        userName: testAnswers.userName, 
+        userEmail: testAnswers.userEmail, 
+        date: dateStr, 
+        time: timeStr 
+    };
 
     for (let a = 0; a < testAreas.length; a++) {
         const area = testAreas[a];
@@ -460,54 +473,53 @@
         payload[`area_${a+1}_open`] = testAnswers.open[a] || "(не заполнено)";
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🔄 ОТПРАВКА РЕЗУЛЬТАТОВ ТЕСТА (существующий код)
-    // ═══════════════════════════════════════════════════════════════
+    // Отправляем результаты теста
     fetch(TEST_RESULTS_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     }).then(() => {
-        // ═══════════════════════════════════════════════════════════════
-        // ✅ НОВЫЙ КОД: Отправка запроса на получение рекомендаций
-        // ═══════════════════════════════════════════════════════════════
+        // ============================================================
+        // ОТПРАВКА ЗАПРОСА НА РЕКОМЕНДАЦИИ
+        // ВАЖНО: Укажите правильный URL вашего скрипта
+        // ============================================================
         
-        // ВАЖНО: Укажите URL вашего нового скрипта (sendRecommendations)
-        // Скопируйте его после публикации скрипта в Apps Script
-        const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwa800cNkZZ3KJVmc3FRGshUkAwW-Xk1oAi8RtugIoHbkYAOsyAYEOosVOiqpaO7eJo/exec";
+        // ⚠️ ЗАМЕНИТЕ ЭТОТ URL НА ВАШ (из скрипта sendRecommendations)
+        const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwFBCN6odEpe2oSiO1HRRHjcZ0frtbY4Tks0JsQ80yxxu3sCu4g8JXj2p8FHe-SpINe/exec";
         
-        // Собираем ВСЕ данные пользователя для рекомендаций
-        const recommendationsPayload = {
+        // Собираем данные для рекомендаций
+        const recommendationsData = {
             userName: testAnswers.userName,
             userEmail: testAnswers.userEmail,
-            // Результаты самооценки (сохранённые ранее)
             selfRatings: selfAnswers.ratings || [],
-            // Результаты теста (закрытые вопросы)
             testClosed: testAnswers.closed,
-            // Результаты теста (открытые вопросы)
             testOpen: testAnswers.open,
-            // Области с вопросами
-            testAreas: testAreas,
-            // Время завершения
+            testAreas: testAreas.map(area => ({
+                name: area.name,
+                closedCount: area.closedCount,
+                closedQuestions: area.closed.map(q => ({
+                    text: q.text,
+                    correct: q.correct,
+                    options: q.options
+                }))
+            })),
             completedAt: now.toISOString()
         };
         
-        // Отправляем запрос на генерацию рекомендаций и отправку письма
+        // Отправляем запрос на получение рекомендаций
         fetch(RECOMMENDATIONS_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(recommendationsPayload)
+            body: JSON.stringify(recommendationsData)
         }).catch(err => {
             console.error("Ошибка при запросе рекомендаций:", err);
-            // Не показываем ошибку пользователю, чтобы не портить впечатление
         });
         
-        // ═══════════════════════════════════════════════════════════════
-        // Показываем экран завершения (существующий код)
-        // ═══════════════════════════════════════════════════════════════
+        // Показываем экран завершения
         showTestCompleteScreen();
+        
     }).catch((error) => {
         console.error("Ошибка при отправке теста:", error);
         showMessage("❌ Ошибка при отправке. Проверьте интернет-соединение.", "error");
