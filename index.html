@@ -17,6 +17,7 @@
     const SELF_ASSESSMENT_URL = "https://script.google.com/macros/s/AKfycbyHPLQ7gZGtnZYTrfnAZNBpuo3Ea5rwbsP9rbBiIAYU2ttUs_i8oS03_Iut-S80Sewb/exec";   // из selfAssessment.gs
     const TEST_RESULTS_URL = "https://script.google.com/macros/s/AKfycbyA95RzcVlbW7UxDIFC4WcfKPpP3_niERw8dN39LJzrYnMG85IS3YnYpPyVTTet8b1L/exec";      // из Code.gs
     const TEST_QUESTIONS_URL = "https://script.google.com/macros/s/AKfycbymZueJVozXFoH2wxfJM3jAGXg08mhwrzVAQMKmpR7mm4XQWQKNe-AHYz-iryA8QVqUYg/exec";    // из getQuestions.gs
+    const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwa800cNkZZ3KJVmc3FRGshUkAwW-Xk1oAi8RtugIoHbkYAOsyAYEOosVOiqpaO7eJo/exec";    // из sendRecomendations.gs
 
     // ============================================================
     // БЛОК 1: САМООЦЕНКА КОМПЕТЕНЦИЙ (оценка от 1 до 10)
@@ -423,53 +424,95 @@
     }
 
     function submitTest() {
-        if (!testAnswers.userName.trim()) { showMessage("❌ Укажите ФИО", "error"); return; }
-        if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { showMessage("❌ Укажите корректный email", "error"); return; }
+    if (!testAnswers.userName.trim()) { showMessage("❌ Укажите ФИО", 'error'); return; }
+    if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { showMessage("❌ Укажите корректный email", 'error'); return; }
 
-        for (let i = 0; i < testAreas.length; i++) {
-            const closedArr = testAnswers.closed[i];
-            if (!closedArr || closedArr.length !== testAreas[i].closedCount || closedArr.some(v => v === null)) {
-                testCurrentArea = i;
-                renderTest();
-                showMessage(`❌ Ответьте на все закрытые вопросы в области ${i+1}`, "error");
-                return;
-            }
+    for (let i = 0; i < testAreas.length; i++) {
+        const closedArr = testAnswers.closed[i];
+        if (!closedArr || closedArr.length !== testAreas[i].closedCount || closedArr.some(v => v === null)) {
+            testCurrentArea = i;
+            renderTest();
+            showMessage(`❌ Ответьте на все закрытые вопросы в области ${i+1}`, "error");
+            return;
         }
+    }
 
-        showMessage("⏳ Отправка результатов теста...", "success");
+    showMessage("⏳ Отправка результатов теста...", "success");
 
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('ru-RU');
-        const timeStr = now.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ru-RU');
+    const timeStr = now.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 
-        let payload = { userName: testAnswers.userName, userEmail: testAnswers.userEmail, date: dateStr, time: timeStr };
+    let payload = { userName: testAnswers.userName, userEmail: testAnswers.userEmail, date: dateStr, time: timeStr };
 
-        for (let a = 0; a < testAreas.length; a++) {
-            const area = testAreas[a];
-            const closedAnswers = testAnswers.closed[a];
-            const scores = [];
-            for (let q = 0; q < area.closed.length; q++) {
-                const isCorrect = (closedAnswers[q] === area.closed[q].correct);
-                const percentScore = isCorrect ? 100 : 0;
-                scores.push(percentScore);
-                payload[`area_${a+1}_q${q+1}_percent`] = percentScore;
-            }
-            const avgScore = scores.length ? Math.round(scores.reduce((s,v)=>s+v,0) / scores.length) : 0;
-            payload[`area_${a+1}_avg`] = avgScore;
-            payload[`area_${a+1}_open`] = testAnswers.open[a] || "(не заполнено)";
+    for (let a = 0; a < testAreas.length; a++) {
+        const area = testAreas[a];
+        const closedAnswers = testAnswers.closed[a];
+        const scores = [];
+        for (let q = 0; q < area.closed.length; q++) {
+            const isCorrect = (closedAnswers[q] === area.closed[q].correct);
+            const percentScore = isCorrect ? 100 : 0;
+            scores.push(percentScore);
+            payload[`area_${a+1}_q${q+1}_percent`] = percentScore;
         }
+        const avgScore = scores.length ? Math.round(scores.reduce((s,v)=>s+v,0) / scores.length) : 0;
+        payload[`area_${a+1}_avg`] = avgScore;
+        payload[`area_${a+1}_open`] = testAnswers.open[a] || "(не заполнено)";
+    }
 
-        fetch(TEST_RESULTS_URL, {
+    // ═══════════════════════════════════════════════════════════════
+    // 🔄 ОТПРАВКА РЕЗУЛЬТАТОВ ТЕСТА (существующий код)
+    // ═══════════════════════════════════════════════════════════════
+    fetch(TEST_RESULTS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        // ═══════════════════════════════════════════════════════════════
+        // ✅ НОВЫЙ КОД: Отправка запроса на получение рекомендаций
+        // ═══════════════════════════════════════════════════════════════
+        
+        // ВАЖНО: Укажите URL вашего нового скрипта (sendRecommendations)
+        // Скопируйте его после публикации скрипта в Apps Script
+        const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbwa800cNkZZ3KJVmc3FRGshUkAwW-Xk1oAi8RtugIoHbkYAOsyAYEOosVOiqpaO7eJo/exec";
+        
+        // Собираем ВСЕ данные пользователя для рекомендаций
+        const recommendationsPayload = {
+            userName: testAnswers.userName,
+            userEmail: testAnswers.userEmail,
+            // Результаты самооценки (сохранённые ранее)
+            selfRatings: selfAnswers.ratings || [],
+            // Результаты теста (закрытые вопросы)
+            testClosed: testAnswers.closed,
+            // Результаты теста (открытые вопросы)
+            testOpen: testAnswers.open,
+            // Области с вопросами
+            testAreas: testAreas,
+            // Время завершения
+            completedAt: now.toISOString()
+        };
+        
+        // Отправляем запрос на генерацию рекомендаций и отправку письма
+        fetch(RECOMMENDATIONS_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }).then(() => {
-            showTestCompleteScreen();
-        }).catch(() => {
-            showMessage("❌ Ошибка при отправке. Проверьте интернет-соединение.", "error");
+            body: JSON.stringify(recommendationsPayload)
+        }).catch(err => {
+            console.error("Ошибка при запросе рекомендаций:", err);
+            // Не показываем ошибку пользователю, чтобы не портить впечатление
         });
-    }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // Показываем экран завершения (существующий код)
+        // ═══════════════════════════════════════════════════════════════
+        showTestCompleteScreen();
+    }).catch((error) => {
+        console.error("Ошибка при отправке теста:", error);
+        showMessage("❌ Ошибка при отправке. Проверьте интернет-соединение.", "error");
+    });
+}
 
     function showTestCompleteScreen() {
         let totalCorrectSum = 0;
