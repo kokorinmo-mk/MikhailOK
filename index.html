@@ -13,12 +13,14 @@
 </div>
 
 <script>
-    // ⚠️ ВСТАВЬТЕ ВАШИ ТРИ URL ИЗ APPS SCRIPT ⚠️
-    const SELF_ASSESSMENT_URL = "https://script.google.com/macros/s/AKfycbyHPLQ7gZGtnZYTrfnAZNBpuo3Ea5rwbsP9rbBiIAYU2ttUs_i8oS03_Iut-S80Sewb/exec";   // из selfAssessment.gs
-    const TEST_RESULTS_URL = "https://script.google.com/macros/s/AKfycbyA95RzcVlbW7UxDIFC4WcfKPpP3_niERw8dN39LJzrYnMG85IS3YnYpPyVTTet8b1L/exec";      // из Code.gs
-    const TEST_QUESTIONS_URL = "https://script.google.com/macros/s/AKfycbymZueJVozXFoH2wxfJM3jAGXg08mhwrzVAQMKmpR7mm4XQWQKNe-AHYz-iryA8QVqUYg/exec";    // из getQuestions.gs
-    const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbzR805NrjgbWYMdperBlgUcjXheh-FAg_y42ZJVpSDf4bPj1tcJMVB05RPPjFwTO0Wf/exec";    // из sendRecomendations.gs
-
+    // ⚠️ ВАШИ URL ИЗ APPS SCRIPT (для сохранения результатов) ⚠️
+    const SELF_ASSESSMENT_URL = "https://script.google.com/macros/s/AKfycbyHPLQ7gZGtnZYTrfnAZNBpuo3Ea5rwbsP9rbBiIAYU2ttUs_i8oS03_Iut-S80Sewb/exec";
+    const TEST_RESULTS_URL = "https://script.google.com/macros/s/AKfycbyA95RzcVlbW7UxDIFC4WcfKPpP3_niERw8dN39LJzrYnMG85IS3YnYpPyVTTet8b1L/exec";
+    const TEST_QUESTIONS_URL = "https://script.google.com/macros/s/AKfycbymZueJVozXFoH2wxfJM3jAGXg08mhwrzVAQMKmpR7mm4XQWQKNe-AHYz-iryA8QVqUYg/exec";
+    
+    // ⚠️ ВАШ URL ОТ LOCAL TUNNEL (замените!) ⚠️
+    const LOCAL_SERVER_URL = "https://wide-masks-deny.loca.lt";  // 👈 СЮДА ВСТАВЬТЕ ВАШ URL
+    
     // ============================================================
     // БЛОК 1: САМООЦЕНКА КОМПЕТЕНЦИЙ (оценка от 1 до 10)
     // ============================================================
@@ -423,108 +425,118 @@
         document.getElementById("submitTestBtn")?.addEventListener('click', submitTest);
     }
 
+    // ============================================================
+    // ФУНКЦИЯ ДЛЯ ОТПРАВКИ ДАННЫХ НА ЛОКАЛЬНЫЙ СЕРВЕР
+    // ============================================================
+    async function sendToLocalServer(userName, userEmail, selfRatings, testScores) {
+        console.log("📤 Отправка данных на локальный сервер...");
+        console.log("URL сервера:", LOCAL_SERVER_URL);
+        
+        try {
+            const response = await fetch(`${LOCAL_SERVER_URL}/recommend`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userName: userName,
+                    userEmail: userEmail,
+                    selfRatings: selfRatings,
+                    testScores: testScores
+                })
+            });
+            
+            const data = await response.json();
+            console.log("✅ Ответ сервера:", data);
+            
+            if (data.success) {
+                console.log("📧 Письмо с рекомендациями отправлено!");
+            } else {
+                console.error("❌ Ошибка от сервера:", data.error);
+            }
+        } catch (error) {
+            console.error("❌ Ошибка подключения к серверу:", error);
+            console.error("Проверьте, что сервер запущен (node server.js) и localtunnel работает (lt --port 3000)");
+        }
+    }
+
     function submitTest() {
-    if (!testAnswers.userName.trim()) { 
-        showMessage("❌ Укажите ФИО", 'error'); 
-        return; 
-    }
-    if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { 
-        showMessage("❌ Укажите корректный email", 'error'); 
-        return; 
-    }
-
-    // Проверяем, что все вопросы теста отвечены
-    for (let i = 0; i < testAreas.length; i++) {
-        const closedArr = testAnswers.closed[i];
-        if (!closedArr || closedArr.length !== testAreas[i].closedCount || closedArr.some(v => v === null)) {
-            testCurrentArea = i;
-            renderTest();
-            showMessage(`❌ Ответьте на все закрытые вопросы в области ${i+1}`, "error");
-            return;
+        if (!testAnswers.userName.trim()) { 
+            showMessage("❌ Укажите ФИО", 'error'); 
+            return; 
         }
-    }
-
-    showMessage("⏳ Отправка результатов теста...", "success");
-
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('ru-RU');
-    const timeStr = now.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-
-    // Формируем payload для сохранения результатов теста
-    let payload = { 
-        userName: testAnswers.userName, 
-        userEmail: testAnswers.userEmail, 
-        date: dateStr, 
-        time: timeStr 
-    };
-
-    for (let a = 0; a < testAreas.length; a++) {
-        const area = testAreas[a];
-        const closedAnswers = testAnswers.closed[a];
-        const scores = [];
-        for (let q = 0; q < area.closed.length; q++) {
-            const isCorrect = (closedAnswers[q] === area.closed[q].correct);
-            const percentScore = isCorrect ? 100 : 0;
-            scores.push(percentScore);
-            payload[`area_${a+1}_q${q+1}_percent`] = percentScore;
+        if (!testAnswers.userEmail.trim() || !testAnswers.userEmail.includes('@')) { 
+            showMessage("❌ Укажите корректный email", 'error'); 
+            return; 
         }
-        const avgScore = scores.length ? Math.round(scores.reduce((s,v)=>s+v,0) / scores.length) : 0;
-        payload[`area_${a+1}_avg`] = avgScore;
-        payload[`area_${a+1}_open`] = testAnswers.open[a] || "(не заполнено)";
-    }
 
-    // Отправляем результаты теста
-    fetch(TEST_RESULTS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(() => {
-        // ============================================================
-        // ОТПРАВКА ЗАПРОСА НА РЕКОМЕНДАЦИИ
-        // ВАЖНО: Укажите правильный URL вашего скрипта
-        // ============================================================
-        
-        // ⚠️ ЗАМЕНИТЕ ЭТОТ URL НА ВАШ (из скрипта sendRecommendations)
-        const RECOMMENDATIONS_URL = "https://script.google.com/macros/s/AKfycbzR805NrjgbWYMdperBlgUcjXheh-FAg_y42ZJVpSDf4bPj1tcJMVB05RPPjFwTO0Wf/exec";
-        
-        // Собираем данные для рекомендаций
-        const recommendationsData = {
-            userName: testAnswers.userName,
-            userEmail: testAnswers.userEmail,
-            selfRatings: selfAnswers.ratings || [],
-            testClosed: testAnswers.closed,
-            testOpen: testAnswers.open,
-            testAreas: testAreas.map(area => ({
-                name: area.name,
-                closedCount: area.closedCount,
-                closedQuestions: area.closed.map(q => ({
-                    text: q.text,
-                    correct: q.correct,
-                    options: q.options
-                }))
-            })),
-            completedAt: now.toISOString()
+        // Проверяем, что все вопросы теста отвечены
+        for (let i = 0; i < testAreas.length; i++) {
+            const closedArr = testAnswers.closed[i];
+            if (!closedArr || closedArr.length !== testAreas[i].closedCount || closedArr.some(v => v === null)) {
+                testCurrentArea = i;
+                renderTest();
+                showMessage(`❌ Ответьте на все закрытые вопросы в области ${i+1}`, "error");
+                return;
+            }
+        }
+
+        showMessage("⏳ Отправка результатов теста...", "success");
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('ru-RU');
+        const timeStr = now.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+        // Формируем payload для сохранения результатов теста в Google Sheets
+        let payload = { 
+            userName: testAnswers.userName, 
+            userEmail: testAnswers.userEmail, 
+            date: dateStr, 
+            time: timeStr 
         };
+
+        // Собираем результаты теста для отправки в Google Sheets
+        const testScoresFlat = [];
         
-        // Отправляем запрос на получение рекомендаций
-        fetch(RECOMMENDATIONS_URL, {
+        for (let a = 0; a < testAreas.length; a++) {
+            const area = testAreas[a];
+            const closedAnswers = testAnswers.closed[a];
+            const scores = [];
+            for (let q = 0; q < area.closed.length; q++) {
+                const isCorrect = (closedAnswers[q] === area.closed[q].correct);
+                const percentScore = isCorrect ? 100 : 0;
+                scores.push(percentScore);
+                testScoresFlat.push(percentScore);
+                payload[`area_${a+1}_q${q+1}_percent`] = percentScore;
+            }
+            const avgScore = scores.length ? Math.round(scores.reduce((s,v)=>s+v,0) / scores.length) : 0;
+            payload[`area_${a+1}_avg`] = avgScore;
+            payload[`area_${a+1}_open`] = testAnswers.open[a] || "(не заполнено)";
+        }
+
+        // Отправляем результаты теста в Google Sheets
+        fetch(TEST_RESULTS_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(recommendationsData)
-        }).catch(err => {
-            console.error("Ошибка при запросе рекомендаций:", err);
+            body: JSON.stringify(payload)
+        }).then(() => {
+            // После сохранения в Google Sheets, отправляем на локальный сервер для рекомендаций
+            sendToLocalServer(
+                testAnswers.userName,
+                testAnswers.userEmail,
+                selfAnswers.ratings,
+                testScoresFlat
+            );
+            
+            // Показываем экран завершения
+            showTestCompleteScreen();
+            
+        }).catch((error) => {
+            console.error("Ошибка при отправке теста:", error);
+            showMessage("❌ Ошибка при отправке. Проверьте интернет-соединение.", "error");
         });
-        
-        // Показываем экран завершения
-        showTestCompleteScreen();
-        
-    }).catch((error) => {
-        console.error("Ошибка при отправке теста:", error);
-        showMessage("❌ Ошибка при отправке. Проверьте интернет-соединение.", "error");
-    });
-}
+    }
 
     function showTestCompleteScreen() {
         let totalCorrectSum = 0;
@@ -547,7 +559,8 @@
                 <h2>🙏 Спасибо, ${escapeHtml(testAnswers.userName)}!</h2>
                 <p>Ваш результат теста: <strong>${overallPercent}%</strong> правильных ответов.</p>
                 <p>${gradeText}</p>
-                <p style="font-size:0.9rem; color:#1f6e8c; margin-bottom: 1.5rem;">✅ Результаты теста успешно отправлены</p>
+                <p style="font-size:0.9rem; color:#1f6e8c; margin-bottom: 1rem;">✅ Результаты теста успешно отправлены</p>
+                <p style="font-size:0.9rem; color:#10b981; margin-bottom: 1.5rem;">📧 Письмо с рекомендациями отправлено на вашу почту!</p>
                 <button class="close-btn" onclick="closeTest()">🚪 Закрыть тест</button>
             </div>
         `;
