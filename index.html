@@ -645,5 +645,45 @@
     loadSelfFromLocalStorage();
     renderSelfAssessment();
 </script>
+
+// Добавьте в конец перед закрывающим </body>
+<script>
+    // Функция для отправки результатов в приложение
+    function sendResultsToApp() {
+        // Собираем результаты по областям
+        const results = [];
+        
+        // Здесь нужно собрать ваши данные из selfAnswers и testAnswers
+        // Пример:
+        for (let i = 0; i < 8; i++) {
+            results.push({
+                name: AREAS_SELF[i].name,
+                score: Math.round(Math.random() * 100), // Замените на реальные данные
+                level: getLevel(Math.round(Math.random() * 100))
+            });
+        }
+        
+        const overallPercent = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+        
+        // Проверяем, что мы в WebView
+        if (window.webkit && window.webkit.messageHandlers) {
+            window.webkit.messageHandlers.testComplete.postMessage({
+                results: results,
+                overallPercent: Math.round(overallPercent)
+            });
+        }
+    }
+    
+    function getLevel(score) {
+        if (score >= 80) return "Эксперт";
+        if (score >= 60) return "Продвинутый";
+        if (score >= 40) return "Средний";
+        return "Базовый";
+    }
+    
+    // Вызываем после завершения теста
+    // sendResultsToApp();
+</script>    
+    
 </body>
 </html>
