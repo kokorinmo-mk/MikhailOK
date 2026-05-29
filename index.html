@@ -645,5 +645,99 @@
     loadSelfFromLocalStorage();
     renderSelfAssessment();
 </script>
+
+<script>
+    // Функция для отправки результатов в iOS приложение
+    function sendResultsToApp() {
+        // Собираем результаты самооценки (selfAnswers.ratings)
+        const selfRatings = window.selfAnswers?.ratings || [];
+        
+        // Собираем результаты теста (testAnswers)
+        let testScores = [];
+        if (window.testAnswers && window.testAreas) {
+            for (let a = 0; a < window.testAreas.length; a++) {
+                let areaScore = 0;
+                let areaCount = 0;
+                for (let q = 0; q < window.testAreas[a].closed.length; q++) {
+                    const userAnswer = window.testAnswers.closed[a]?.[q];
+                    const isCorrect = (userAnswer === window.testAreas[a].closed[q].correct);
+                    areaScore += isCorrect ? 100 : 0;
+                    areaCount++;
+                }
+                const avgScore = areaCount ? Math.round(areaScore / areaCount) : 0;
+                testScores.push(avgScore);
+            }
+        }
+        
+        // Формируем результаты по 8 областям
+        const areaNames = [
+            "Область 1. Осознание",
+            "Область 2. Стратегия", 
+            "Область 3. Реинжиниринг процессов",
+            "Область 4. Проектирование и разработка",
+            "Область 5. Внедрение и развитие",
+            "Область 6. Общесистемные компетенции",
+            "Область 7. Отраслевые компетенции",
+            "Область 8. Soft skills"
+        ];
+        
+        // Используем результаты теста, если есть, иначе самооценку
+        const scores = testScores.length === 8 ? testScores : selfRatings.slice(0, 8);
+        
+        const results = areaNames.map((name, idx) => ({
+            name: name,
+            score: scores[idx] || 50,
+            level: getLevel(scores[idx] || 50)
+        }));
+        
+        const overallPercent = Math.round(scores.reduce((a,b) => a + b, 0) / scores.length);
+        
+        // Отправляем в приложение
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.testComplete) {
+            window.webkit.messageHandlers.testComplete.postMessage({
+                results: results,
+                overallPercent: overallPercent
+            });
+            return true;
+        }
+        return false;
+    }
+    
+    function getLevel(score) {
+        if (score >= 80) return "Эксперт";
+        if (score >= 60) return "Продвинутый";
+        if (score >= 40) return "Средний";
+        return "Базовый";
+    }
+    
+    // Перехватываем кнопку "Завершить тест"
+    const originalClose = window.closeTest;
+    window.closeTest = function() {
+        sendResultsToApp();
+        if (originalClose) originalClose();
+    };
+    
+    // Добавляем кнопку "Завершить и сохранить"
+    const saveBtn = document.createElement('button');
+    saveBtn.innerHTML = '✅ Сохранить результаты и выйти';
+    saveBtn.style.position = 'fixed';
+    saveBtn.style.bottom = '20px';
+    saveBtn.style.right = '20px';
+    saveBtn.style.zIndex = '9999';
+    saveBtn.style.padding = '12px 20px';
+    saveBtn.style.backgroundColor = '#10b981';
+    saveBtn.style.color = 'white';
+    saveBtn.style.border = 'none';
+    saveBtn.style.borderRadius = '25px';
+    saveBtn.style.fontWeight = 'bold';
+    saveBtn.style.fontSize = '14px';
+    saveBtn.onclick = function() {
+        sendResultsToApp();
+    };
+    document.body.appendChild(saveBtn);
+    
+    console.log("✅ Скрипт отправки результатов загружен");
+</script>
+    
 </body>
 </html>
